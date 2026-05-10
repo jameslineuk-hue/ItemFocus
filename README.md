@@ -32,7 +32,6 @@ Responses use JSON. New tags receive `public_code`, `finder_path`, and `finder_u
 Use **Python 3.11** (see [`.python-version`](.python-version)) so dependency wheels resolve cleanly—for example macOS/Homebrew defaults to too-new Python builds that may compile pydantic from source.
 
 ```bash
-cd ItemFocus
 python3.11 -m venv .venv && source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env   # edit with your Supabase credentials
