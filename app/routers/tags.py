@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from starlette.requests import Request
 
 from app import codes, schemas
 from app.db import get_client
+from app.deps import require_admin
 
 router = APIRouter(tags=["tags"])
 
@@ -10,7 +11,7 @@ _TABLE = "finder_tags"
 _MAX_ATTEMPTS = 25
 
 
-@router.post("/tags", response_model=schemas.CreateTagResponse)
+@router.post("/tags", response_model=schemas.CreateTagResponse, dependencies=[Depends(require_admin)])
 def create_tag(body: schemas.CreateTagBody, request: Request) -> schemas.CreateTagResponse:
     supabase = get_client()
     name = body.owner_name.strip()

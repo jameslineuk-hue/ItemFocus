@@ -10,63 +10,85 @@
     <header class="top-nav">
       <a href="/index.html">ItemFocus</a>
       <span class="sep">·</span>
-      <a href="/found.html">Found an item?</a>
-      <span class="sep">·</span>
       <a href="/admin.html">Manage tags</a>
+      <span class="sep">·</span>
+      <a href="/found.html">Found an item?</a>
     </header>
 
     <main>
       <section class="card">
         <h1>Create a tag</h1>
         <p class="intro muted">
-          Register an item and get a finder link to print or encode as a QR code. Data is saved through the API into
-          Supabase.
+          Same admin session as <a href="/admin.html">Manage tags</a> (set <strong>ADMIN_SECRET</strong> on the server).
+          Register an item and get a finder link to print or encode as a QR code.
         </p>
 
         <div id="err" class="banner-error hidden" role="alert"></div>
 
-        <form id="form" class="stack-form">
+        <div id="gate" class="stack-form">
           <label>
-            Item type
-            <select name="category" required>
-              <option value="laptop">Laptop</option>
-              <option value="keys">Keys</option>
-              <option value="wallet">Wallet</option>
-              <option value="other">Other</option>
-            </select>
+            Admin key
+            <input id="admin-key" type="password" autocomplete="current-password" placeholder="Same value as ADMIN_SECRET" />
           </label>
-          <label>
-            Your name
-            <input name="owner_name" type="text" required autocomplete="name" placeholder="e.g. Sam Taylor" />
-          </label>
-          <label>
-            Phone
-            <input name="owner_phone" type="tel" required autocomplete="tel" placeholder="e.g. 07123456789" />
-          </label>
-          <button type="submit">Create tag</button>
-        </form>
-
-        <section id="result" class="result-panel hidden" aria-live="polite">
-          <h2>Your tag</h2>
-          <p class="code-label">ItemFocus code</p>
-          <p id="out-code" class="code-value"></p>
-          <p class="muted small">Put this link (or a QR of it) on the item:</p>
-          <p><a id="out-link" class="break-all" href="#"></a></p>
-          <div class="tag-preview">
-            <div class="tag-card">
-              <p class="tag-title">ItemFocus</p>
-              <img id="out-qr" class="tag-qr hidden" alt="" />
-              <p id="out-tag-url" class="tag-url break-all"></p>
-            </div>
-            <button type="button" id="print-tag" class="secondary">Print this tag</button>
+          <div class="inline-form-actions">
+            <button type="button" id="unlock">Unlock</button>
           </div>
-        </section>
+        </div>
+
+        <div id="create-panel" class="hidden">
+          <div class="inline-form-actions" style="margin-bottom: 1rem">
+            <button type="button" id="logout" class="secondary">Sign out</button>
+            <a href="/admin.html" class="secondary" role="button">Manage tags</a>
+          </div>
+
+          <form id="form" class="stack-form">
+            <label>
+              Item type
+              <select name="category" required>
+                <option value="laptop">Laptop</option>
+                <option value="keys">Keys</option>
+                <option value="wallet">Wallet</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label>
+              Owner name
+              <input name="owner_name" type="text" required autocomplete="name" placeholder="e.g. Sam Taylor" />
+            </label>
+            <label>
+              Phone
+              <input name="owner_phone" type="tel" required autocomplete="tel" placeholder="e.g. 07123456789" />
+            </label>
+            <button type="submit">Create tag</button>
+          </form>
+
+          <section id="result" class="result-panel hidden" aria-live="polite">
+            <h2>Your tag</h2>
+            <p class="code-label">ItemFocus code</p>
+            <p id="out-code" class="code-value"></p>
+            <p class="muted small">Put this link (or a QR of it) on the item:</p>
+            <p><a id="out-link" class="break-all" href="#"></a></p>
+            <div class="tag-preview">
+              <div class="tag-card">
+                <p class="tag-title">ItemFocus</p>
+                <img id="out-qr" class="tag-qr hidden" alt="" />
+                <p id="out-tag-url" class="tag-url break-all"></p>
+              </div>
+              <button type="button" id="print-tag" class="secondary">Print this tag</button>
+            </div>
+          </section>
+        </div>
       </section>
     </main>
 
     <script src="/app.js"></script>
     <script>
       (function () {
+        var gate = document.getElementById("gate");
+        var createPanel = document.getElementById("create-panel");
+        var adminKey = document.getElementById("admin-key");
+        var unlock = document.getElementById("unlock");
+        var logout = document.getElementById("logout");
         var form = document.getElementById("form");
         var err = document.getElementById("err");
         var result = document.getElementById("result");
@@ -80,6 +102,39 @@
           err.textContent = msg;
           err.classList.remove("hidden");
         }
+
+        function clearError() {
+          err.classList.add("hidden");
+        }
+
+        function setUnlocked(on) {
+          if (on) {
+            gate.classList.add("hidden");
+            createPanel.classList.remove("hidden");
+          } else {
+            gate.classList.remove("hidden");
+            createPanel.classList.add("hidden");
+            result.classList.add("hidden");
+          }
+        }
+
+        unlock.addEventListener("click", function () {
+          var t = String(adminKey.value || "").trim();
+          if (!t) {
+            showError("Enter the admin key.");
+            return;
+          }
+          window.ItemFocusAdmin.setToken(t);
+          setUnlocked(true);
+          clearError();
+        });
+
+        logout.addEventListener("click", function () {
+          window.ItemFocusAdmin.clearToken();
+          adminKey.value = "";
+          setUnlocked(false);
+          clearError();
+        });
 
         form.addEventListener("submit", async function (ev) {
           ev.preventDefault();
@@ -97,7 +152,7 @@
           try {
             res = await fetch("/api/tags", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: window.ItemFocusAdmin.authHeaders(),
               body: JSON.stringify(body),
             });
           } catch (e) {
@@ -112,13 +167,28 @@
             data = null;
           }
 
+          if (res.status === 503) {
+            showError(
+              (data && data.detail) ||
+                "Admin API is not configured. Set ADMIN_SECRET on the server and restart."
+            );
+            return;
+          }
+          if (res.status === 401) {
+            window.ItemFocusAdmin.clearToken();
+            setUnlocked(false);
+            showError("Invalid or expired admin session. Enter your admin key again.");
+            return;
+          }
+
           if (!res.ok) {
             var detail = data && data.detail;
             var msg = "Could not create tag.";
             if (typeof detail === "string") msg = detail;
-            else if (Array.isArray(detail) && detail.length && detail[0].msg) msg = detail.map(function (x) {
-              return x.msg;
-            }).join(" ");
+            else if (Array.isArray(detail) && detail.length && detail[0].msg)
+              msg = detail.map(function (x) {
+                return x.msg;
+              }).join(" ");
             showError(msg);
             return;
           }
@@ -127,9 +197,7 @@
           outLink.href = data.finder_url;
           outLink.textContent = data.finder_url;
           outTagUrl.textContent = data.finder_url;
-          var qrSrc =
-            "https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=" + encodeURIComponent(data.finder_url);
-          outQr.src = qrSrc;
+          outQr.src = window.ItemFocusUi.finderQrImageUrl(data.finder_url);
           outQr.alt = "QR code linking to finder page";
           outQr.classList.remove("hidden");
           result.classList.remove("hidden");
@@ -139,6 +207,10 @@
         printTag.addEventListener("click", function () {
           window.print();
         });
+
+        if (window.ItemFocusAdmin.getToken()) {
+          setUnlocked(true);
+        }
       })();
     </script>
   </body>

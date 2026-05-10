@@ -5,7 +5,7 @@ ItemFocus builds on the idea behind KeyFocus with a clearer scope: attach a QR t
 The stack combines:
 
 - **Python (FastAPI)** — small REST API backed by Supabase and **serves** the bundled static HTML/CSS/JS from `static/` on the same host.
-- **Static site** — `index.html`, `create.html`, and `finder` flow in `found.html`, calling `/api/*` on the same origin.
+- **Static site** — `index.html` is a minimal landing page; `found.html` is the public finder; `admin.html` and `create.html` require the same **ADMIN_SECRET** (see environment variables).
 
 ### Prerequisites
 
@@ -22,8 +22,8 @@ The server uses **only** that secret so the database can stay behind Row Level S
 | Method | Path | Purpose |
 |--------|------|--------|
 | `GET` | `/api/health` | Liveness for hosting checks |
-| `POST` | `/api/tags` | Create a tag; body `{ "category", "owner_name", "owner_phone" }` |
-| `GET` | `/api/tags/{code}` | Finder lookup by public code (`IF-XXXXXX`) |
+| `POST` | `/api/tags` | Create a tag (requires admin: `Authorization: Bearer …` or `X-Admin-Key` with `ADMIN_SECRET`); body `{ "category", "owner_name", "owner_phone" }` |
+| `GET` | `/api/tags/{code}` | Finder lookup by public code (`IF-XXXXXX`) — no admin key |
 
 Responses use JSON. New tags receive `public_code`, `finder_path`, and `finder_url`.
 
@@ -41,7 +41,7 @@ uvicorn app.main:app --reload --port 8000
 Then open:
 
 - http://localhost:8000/index.html  
-- http://localhost:8000/create.html  
+- http://localhost:8000/admin.html — set `ADMIN_SECRET` in `.env`; use the same value to unlock **Manage tags** and **Create a tag**
 
 The finder page expects a query string, for example:
 
@@ -58,6 +58,7 @@ The finder page expects a query string, for example:
 3. Add environment variables in the service:
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
+   - `ADMIN_SECRET` — shared secret for `/api/admin/*` and `POST /api/tags` (the Manage tags and Create tag pages)
 4. Deploy. Visiting `/` loads `index.html` via `StaticFiles(html=True)`; use `/found.html?code=…` from printed or generated QR codes.
 
 This repo includes [`render.yaml`](render.yaml) for a Blueprint (`sync: false` means set Supabase vars in the Render dashboard).
