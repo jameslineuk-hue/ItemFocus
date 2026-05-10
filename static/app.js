@@ -20,9 +20,37 @@ function categoryLabel(category) {
   return map[String(category)] || category;
 }
 
+function finderQrImageUrl(finderUrl) {
+  return (
+    "https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=" + encodeURIComponent(String(finderUrl || ""))
+  );
+}
+
+var ADMIN_TOKEN_KEY = "itemfocus_admin_token";
+
 window.ItemFocusUi = {
   digitsOnly: digitsOnly,
   telHrefFromPhone: telHrefFromPhone,
   formatPhoneDisplay: formatPhoneDisplay,
   categoryLabel: categoryLabel,
+  finderQrImageUrl: finderQrImageUrl,
+};
+
+window.ItemFocusAdmin = {
+  tokenKey: ADMIN_TOKEN_KEY,
+  getToken: function () {
+    return sessionStorage.getItem(ADMIN_TOKEN_KEY);
+  },
+  setToken: function (t) {
+    sessionStorage.setItem(ADMIN_TOKEN_KEY, t);
+  },
+  clearToken: function () {
+    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+  },
+  authHeaders: function () {
+    var t = sessionStorage.getItem(ADMIN_TOKEN_KEY);
+    var h = { "Content-Type": "application/json" };
+    if (t) h.Authorization = "Bearer " + t;
+    return h;
+  },
 };

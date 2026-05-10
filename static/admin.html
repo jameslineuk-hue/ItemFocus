@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ItemFocus | Manage tags</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top-nav">
+      <a href="/index.html">ItemFocus</a>
+      <span class="sep">·</span>
+      <a href="/create.html">Create a tag</a>
+      <span class="sep">·</span>
+      <a href="/found.html">Found an item?</a>
+    </header>
+
+    <main>
+      <section class="card">
+        <h1>Manage tags</h1>
+        <p class="intro muted admin-hide-print">
+          Sign in with the server <strong>ADMIN_SECRET</strong>, then view every tag, reprint a QR code, or open a tag to
+          edit or delete it.
+        </p>
+
+        <div id="err" class="banner-error hidden" role="alert"></div>
+
+        <div id="gate" class="stack-form admin-hide-print">
+          <label>
+            Admin key
+            <input id="admin-key" type="password" autocomplete="current-password" placeholder="Same value as ADMIN_SECRET" />
+          </label>
+          <div class="inline-form-actions">
+            <button type="button" id="unlock">Unlock</button>
+            <button type="button" id="logout" class="secondary hidden">Sign out</button>
+          </div>
+        </div>
+
+        <div id="panel" class="hidden">
+          <ul id="entry-list" class="entry-list" aria-live="polite"></ul>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+    <script>
+      (function () {
+        var err = document.getElementById("err");
+        var gate = document.getElementById("gate");
+        var panel = document.getElementById("panel");
+        var adminKey = document.getElementById("admin-key");
+        var unlock = document.getElementById("unlock");
+        var logout = document.getElementById("logout");
+        var entryList = document.getElementById("entry-list");
+        var openQrId = null;
+
+        function showError(msg) {
+          err.textContent = msg;
+          err.classList.remove("hidden");
+        }
+
+        function clearError() {
+          err.classList.add("hidden");
+        }
+
+        function setAuthed(authed) {
+          if (authed) {
+            gate.querySelector("label").classList.add("hidden");
+            adminKey.classList.add("hidden");
+            unlock.classList.add("hidden");
+            logout.classList.remove("hidden");
+          } else {
+            gate.querySelector("label").classList.remove("hidden");
+            adminKey.classList.remove("hidden");
+            unlock.classList.remove("hidden");
+            logout.classList.add("hidden");
+          }
+        }
+
+        function renderList(tags) {
+          entryList.innerHTML = "";
+          openQrId = null;
+          if (!tags || !tags.length) {
+            var empty = document.createElement("li");
+            empty.className = "muted";
+            empty.textContent = "No tags yet.";
+            entryList.appendChild(empty);
+            return;
+          }
+          tags.forEach(function (t) {
+            var li = document.createElement("li");
+            li.className = "admin-entry";
+            li.dataset.tagId = t.id;
+
+            var qrWrap = document.createElement("div");
+            qrWrap.className = "admin-entry-qr hidden";
+
+            var preview = document.createElement("div");
+            preview.className = "tag-preview";
+
+            var card = document.createElement("div");
+            card.className = "tag-card";
+            var title = document.createElement("p");
+            title.className = "tag-title";
+            title.textContent = "ItemFocus";
+            var img = document.createElement("img");
+            img.className = "tag-qr";
+            img.alt = "QR code linking to finder page";
+            var urlLine = document.createElement("p");
+            urlLine.className = "tag-url break-all";
+            card.appendChild(title);
+            card.appendChild(img);
+            card.appendChild(urlLine);
+            preview.appendChild(card);
+            var printTag = document.createElement("button");
+            printTag.type = "button";
+            printTag.className = "secondary admin-hide-print";
+            printTag.textContent = "Print this tag";
+            printTag.addEventListener("click", function () {
+              document.body.classList.add("admin-print-qr");
+              li.classList.add("admin-entry--printing");
+              function onEnd() {
+                document.body.classList.remove("admin-print-qr");
+                li.classList.remove("admin-entry--printing");
+                window.removeEventListener("afterprint", onEnd);
+              }
+              window.addEventListener("afterprint", onEnd);
+              window.print();
+            });
+            preview.appendChild(printTag);
+            qrWrap.appendChild(preview);
+
+            var head = document.createElement("div");
+            head.className = "admin-entry-head admin-hide-print";
+
+            var codeEl = document.createElement("strong");
+            codeEl.textContent = t.public_code;
+            head.appendChild(codeEl);
+
+            var actions = document.createElement("div");
+            actions.className = "admin-entry-actions";
+
+            var btnQr = document.createElement("button");
+            btnQr.type = "button";
+            btnQr.className = "secondary";
+            btnQr.textContent = "QR code";
+            btnQr.addEventListener("click", function () {
+              var id = t.id;
+              if (openQrId === id) {
+                openQrId = null;
+                qrWrap.classList.add("hidden");
+                li.classList.remove("admin-entry--open");
+                return;
+              }
+              if (openQrId) {
+                var prev = entryList.querySelector('[data-tag-id="' + openQrId + '"]');
+                if (prev) {
+                  prev.classList.remove("admin-entry--open");
+                  var prevQr = prev.querySelector(".admin-entry-qr");
+                  if (prevQr) prevQr.classList.add("hidden");
+                }
+              }
+              openQrId = id;
+              li.classList.add("admin-entry--open");
+              img.src = window.ItemFocusUi.finderQrImageUrl(t.finder_url);
+              urlLine.textContent = t.finder_url;
+              qrWrap.classList.remove("hidden");
+            });
+
+            var btnPrint = document.createElement("button");
+            btnPrint.type = "button";
+            btnPrint.className = "secondary";
+            btnPrint.textContent = "Print QR";
+            btnPrint.addEventListener("click", function () {
+              if (openQrId !== t.id) {
+                btnQr.click();
+              }
+              document.body.classList.add("admin-print-qr");
+              li.classList.add("admin-entry--printing");
+              function onEnd() {
+                document.body.classList.remove("admin-print-qr");
+                li.classList.remove("admin-entry--printing");
+                window.removeEventListener("afterprint", onEnd);
+              }
+              window.addEventListener("afterprint", onEnd);
+              window.print();
+            });
+
+            var btnEdit = document.createElement("a");
+            btnEdit.className = "secondary";
+            btnEdit.href = "/edit.html?id=" + encodeURIComponent(t.id);
+            btnEdit.textContent = "Edit";
+            btnEdit.setAttribute("role", "button");
+
+            actions.appendChild(btnQr);
+            actions.appendChild(btnPrint);
+            actions.appendChild(btnEdit);
+            head.appendChild(actions);
+            li.appendChild(head);
+
+            var meta = document.createElement("p");
+            meta.className = "admin-entry-meta admin-hide-print";
+            meta.textContent =
+              window.ItemFocusUi.categoryLabel(t.category) +
+              " · " +
+              t.owner_name +
+              " · " +
+              window.ItemFocusUi.formatPhoneDisplay(t.owner_phone);
+            li.appendChild(meta);
+            li.appendChild(qrWrap);
+
+            entryList.appendChild(li);
+          });
+        }
+
+        async function loadList() {
+          clearError();
+          var res;
+          try {
+            res = await fetch("/api/admin/tags", { headers: window.ItemFocusAdmin.authHeaders() });
+          } catch (e) {
+            showError("Network error—check your connection and try again.");
+            return;
+          }
+          var data;
+          try {
+            data = await res.json();
+          } catch (_) {
+            data = null;
+          }
+          if (res.status === 503) {
+            showError(
+              (data && data.detail) ||
+                "Admin API is not configured. Set ADMIN_SECRET on the server and restart."
+            );
+            return;
+          }
+          if (res.status === 401) {
+            window.ItemFocusAdmin.clearToken();
+            showError("Invalid admin key. Try again.");
+            panel.classList.add("hidden");
+            setAuthed(false);
+            return;
+          }
+          if (!res.ok) {
+            var detail = data && data.detail;
+            var msg = "Could not load tags.";
+            if (typeof detail === "string") msg = detail;
+            showError(msg);
+            return;
+          }
+          panel.classList.remove("hidden");
+          setAuthed(true);
+          renderList(Array.isArray(data) ? data : []);
+        }
+
+        unlock.addEventListener("click", function () {
+          var t = String(adminKey.value || "").trim();
+          if (!t) {
+            showError("Enter the admin key.");
+            return;
+          }
+          window.ItemFocusAdmin.setToken(t);
+          loadList();
+        });
+
+        logout.addEventListener("click", function () {
+          window.ItemFocusAdmin.clearToken();
+          adminKey.value = "";
+          panel.classList.add("hidden");
+          entryList.innerHTML = "";
+          setAuthed(false);
+          clearError();
+        });
+
+        if (window.ItemFocusAdmin.getToken()) {
+          adminKey.value = "";
+          loadList();
+        }
+      })();
+    </script>
+  </body>
+</html>

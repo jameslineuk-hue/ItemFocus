@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.routers import tags
+from app.routers import admin_tags, tags
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = ROOT / "static"
@@ -17,6 +17,7 @@ def health() -> dict[str, str]:
 
 
 app.include_router(tags.router, prefix="/api")
+app.include_router(admin_tags.router, prefix="/api")
 
 
 app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ItemFocus | Edit tag</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top-nav">
+      <a href="/index.html">ItemFocus</a>
+      <span class="sep">·</span>
+      <a href="/admin.html">Manage tags</a>
+      <span class="sep">·</span>
+      <a href="/create.html">Create a tag</a>
+    </header>
+
+    <main>
+      <section class="card">
+        <h1 class="admin-hide-print">Edit tag</h1>
+
+        <div id="state-bad-id" class="banner-error hidden" role="alert">
+          Open this page from <strong>Manage tags</strong> (edit link) or add a valid <code>?id=</code> tag UUID to the URL.
+        </div>
+
+        <div id="err" class="banner-error hidden" role="alert"></div>
+
+        <div id="gate" class="stack-form hidden">
+          <p class="muted">Admin key required.</p>
+          <label>
+            Admin key
+            <input id="admin-key" type="password" autocomplete="current-password" placeholder="Same value as ADMIN_SECRET" />
+          </label>
+          <button type="button" id="unlock">Unlock</button>
+        </div>
+
+        <form id="form" class="stack-form hidden">
+          <p class="muted small admin-hide-print" id="meta-line"></p>
+          <label>
+            Item type
+            <select name="category" id="field-category" required>
+              <option value="laptop">Laptop</option>
+              <option value="keys">Keys</option>
+              <option value="wallet">Wallet</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label>
+            Owner name
+            <input name="owner_name" id="field-name" type="text" required autocomplete="name" />
+          </label>
+          <label>
+            Phone
+            <input name="owner_phone" id="field-phone" type="tel" required autocomplete="tel" />
+          </label>
+          <div class="inline-form-actions">
+            <button type="submit">Save changes</button>
+            <button type="button" id="print-tag" class="secondary">Print QR tag</button>
+            <a href="/admin.html" class="secondary" role="button">Back to list</a>
+          </div>
+          <button type="button" id="delete-btn" class="danger" style="margin-top: 1.25rem">Delete this tag</button>
+        </form>
+
+        <section id="qr-print-helper" class="hidden" aria-hidden="true">
+          <div id="print-area" class="tag-preview" style="margin-top: 1rem">
+            <div class="tag-card">
+              <p class="tag-title">ItemFocus</p>
+              <img id="qr-img" class="tag-qr" alt="" />
+              <p id="qr-url" class="tag-url break-all"></p>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+    <script>
+      (function () {
+        var UUID_RE =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        var params = new URLSearchParams(window.location.search);
+        var rawId = String(params.get("id") || "").trim();
+        var tagId = UUID_RE.test(rawId) ? rawId : "";
+
+        var badId = document.getElementById("state-bad-id");
+        var err = document.getElementById("err");
+        var gate = document.getElementById("gate");
+        var form = document.getElementById("form");
+        var adminKey = document.getElementById("admin-key");
+        var unlock = document.getElementById("unlock");
+        var metaLine = document.getElementById("meta-line");
+        var printTag = document.getElementById("print-tag");
+        var deleteBtn = document.getElementById("delete-btn");
+        var qrPrintHelper = document.getElementById("qr-print-helper");
+        var qrImg = document.getElementById("qr-img");
+        var qrUrl = document.getElementById("qr-url");
+
+        var finderUrl = "";
+
+        function showError(msg) {
+          err.textContent = msg;
+          err.classList.remove("hidden");
+        }
+        function clearError() {
+          err.classList.add("hidden");
+        }
+
+        if (!tagId) {
+          badId.classList.remove("hidden");
+          return;
+        }
+
+        function applyTag(data) {
+          clearError();
+          finderUrl = data.finder_url;
+          metaLine.textContent =
+            "Code " +
+            data.public_code +
+            " · created " +
+            new Date(data.created_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+          document.getElementById("field-category").value = data.category;
+          document.getElementById("field-name").value = data.owner_name;
+          document.getElementById("field-phone").value = data.owner_phone;
+          qrImg.src = window.ItemFocusUi.finderQrImageUrl(data.finder_url);
+          qrImg.alt = "QR code linking to finder page";
+          qrUrl.textContent = data.finder_url;
+          document.title = "ItemFocus | Edit " + data.public_code;
+          form.classList.remove("hidden");
+          gate.classList.add("hidden");
+        }
+
+        async function fetchTag() {
+          clearError();
+          var res;
+          try {
+            res = await fetch("/api/admin/tags/" + encodeURIComponent(tagId), {
+              headers: window.ItemFocusAdmin.authHeaders(),
+            });
+          } catch (e) {
+            showError("Network error—check your connection and try again.");
+            return;
+          }
+          var data;
+          try {
+            data = await res.json();
+          } catch (_) {
+            data = null;
+          }
+          if (res.status === 503) {
+            showError(
+              (data && data.detail) ||
+                "Admin API is not configured. Set ADMIN_SECRET on the server and restart."
+            );
+            return;
+          }
+          if (res.status === 401) {
+            window.ItemFocusAdmin.clearToken();
+            gate.classList.remove("hidden");
+            form.classList.add("hidden");
+            showError("Enter your admin key or unlock below.");
+            return;
+          }
+          if (res.status === 404) {
+            showError("That tag was not found. It may have been deleted.");
+            return;
+          }
+          if (!res.ok) {
+            var detail = data && data.detail;
+            showError(typeof detail === "string" ? detail : "Could not load tag.");
+            return;
+          }
+          applyTag(data);
+        }
+
+        unlock.addEventListener("click", function () {
+          var t = String(adminKey.value || "").trim();
+          if (!t) {
+            showError("Enter the admin key.");
+            return;
+          }
+          window.ItemFocusAdmin.setToken(t);
+          fetchTag();
+        });
+
+        form.addEventListener("submit", async function (ev) {
+          ev.preventDefault();
+          clearError();
+          var body = {
+            category: document.getElementById("field-category").value,
+            owner_name: String(document.getElementById("field-name").value || "").trim(),
+            owner_phone: String(document.getElementById("field-phone").value || "").trim(),
+          };
+          var res;
+          try {
+            res = await fetch("/api/admin/tags/" + encodeURIComponent(tagId), {
+              method: "PATCH",
+              headers: window.ItemFocusAdmin.authHeaders(),
+              body: JSON.stringify(body),
+            });
+          } catch (e) {
+            showError("Network error—check your connection and try again.");
+            return;
+          }
+          var data;
+          try {
+            data = await res.json();
+          } catch (_) {
+            data = null;
+          }
+          if (res.status === 401) {
+            window.ItemFocusAdmin.clearToken();
+            gate.classList.remove("hidden");
+            form.classList.add("hidden");
+            showError("Session expired. Enter your admin key again.");
+            return;
+          }
+          if (!res.ok) {
+            var detail = data && data.detail;
+            var msg = "Could not save.";
+            if (typeof detail === "string") msg = detail;
+            else if (Array.isArray(detail) && detail.length && detail[0].msg)
+              msg = detail.map(function (x) {
+                return x.msg;
+              }).join(" ");
+            showError(msg);
+            return;
+          }
+          applyTag(data);
+        });
+
+        printTag.addEventListener("click", function () {
+          if (!finderUrl) return;
+          qrPrintHelper.classList.remove("hidden");
+          document.body.classList.add("admin-print-qr");
+          var card = document.querySelector("#print-area .tag-card");
+          if (card && card.parentElement) {
+            card.parentElement.classList.add("admin-entry--printing");
+          }
+          function onEnd() {
+            document.body.classList.remove("admin-print-qr");
+            if (card && card.parentElement) {
+              card.parentElement.classList.remove("admin-entry--printing");
+            }
+            qrPrintHelper.classList.add("hidden");
+            window.removeEventListener("afterprint", onEnd);
+          }
+          window.addEventListener("afterprint", onEnd);
+          window.print();
+        });
+
+        deleteBtn.addEventListener("click", async function () {
+          if (!window.confirm("Delete this tag permanently? The code will stop working for finders.")) return;
+          clearError();
+          var res;
+          try {
+            res = await fetch("/api/admin/tags/" + encodeURIComponent(tagId), {
+              method: "DELETE",
+              headers: window.ItemFocusAdmin.authHeaders(),
+            });
+          } catch (e) {
+            showError("Network error—check your connection and try again.");
+            return;
+          }
+          if (res.status === 401) {
+            window.ItemFocusAdmin.clearToken();
+            gate.classList.remove("hidden");
+            form.classList.add("hidden");
+            showError("Session expired. Enter your admin key again.");
+            return;
+          }
+          if (!res.ok) {
+            var data;
+            try {
+              data = await res.json();
+            } catch (_) {
+              data = null;
+            }
+            showError((data && data.detail) || "Could not delete.");
+            return;
+          }
+          window.location.href = "/admin.html";
+        });
+
+        if (window.ItemFocusAdmin.getToken()) {
+          fetchTag();
+        } else {
+          gate.classList.remove("hidden");
+        }
+      })();
+    </script>
+  </body>
+</html>

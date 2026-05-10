@@ -15,6 +15,9 @@ def _require(name: str) -> str:
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 
+# Shared secret for /api/admin/* (send as Authorization: Bearer … or X-Admin-Key). Optional: if unset, admin routes return 503.
+ADMIN_SECRET = os.getenv("ADMIN_SECRET", "").strip()
+
 
 def assert_supabase_config() -> None:
     _require("SUPABASE_URL")
