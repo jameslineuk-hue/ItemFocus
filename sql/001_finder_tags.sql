@@ -19,4 +19,6 @@ comment on column public.finder_tags.category is 'Item type for finder context';
 
 alter table public.finder_tags enable row level security;
 
--- Intentionally no policies: use the service role key only from the Python API (never in the browser).
+-- Intentionally no policies: callers must connect as Postgres role `service_role` (secret API key:
+-- `sb_secret_...` or legacy JWT `service_role`). The publishable key runs as `anon` and will get
+-- PostgREST 42501 "new row violates row-level security policy" on insert/select.

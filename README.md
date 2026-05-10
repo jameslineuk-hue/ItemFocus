@@ -64,6 +64,8 @@ This repo includes [`render.yaml`](render.yaml) for a Blueprint (`sync: false` m
 
 If the stack shows `SupabaseException("Invalid API key")` at import/startup but you pasted a valid **`sb_secret_...`** secret, the cause is almost always an **old `supabase` Python package** (before 2.26) that only accepted JWT-shaped keys. This project pins **`supabase>=2.26`** in `requirements.txt` for that reason—redeploy after pulling so Render reinstalls dependencies.
 
+If PostgREST returns **`42501` / `new row violates row-level security policy` on `finder_tags`**, the API is **not** using a **secret** key: with no RLS policies, only the **`anon`** role (publishable / `sb_publishable_...`) hits that error. Set Render’s **`SUPABASE_SERVICE_ROLE_KEY`** to a **secret** key from **Settings → API Keys** (`sb_secret_...` or legacy **`service_role` JWT**), redeploy, and ensure there isn’t a second env slot or typo overriding it.
+
 ### Security notes
 
 - Treat each tag URL like a bearer secret—anyone with the link can view the saved contact fields.
