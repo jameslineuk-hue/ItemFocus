@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ItemFocus | Found an item</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top-nav">
+      <a href="/index.html">ItemFocus</a>
+      <span class="sep">·</span>
+      <a href="/create.html">Create a tag</a>
+    </header>
+
+    <main>
+      <section class="card">
+        <section id="state-missing" class="panel">
+          <h1>Found an item?</h1>
+          <p class="intro">
+            This page shows the owner only when you use the full link from the ItemFocus tag, including its code in the
+            URL.
+          </p>
+          <p class="muted">There is nothing to display without a valid code in the address bar.</p>
+        </section>
+
+        <section id="state-invalid" class="panel hidden">
+          <h1>Code not recognised</h1>
+          <p class="intro muted">That ItemFocus code does not match a tag on file. Please double-check the link or tag.</p>
+        </section>
+
+        <section id="state-found" class="panel hidden">
+          <h1>Thank you</h1>
+          <p class="intro">If you found this item, please contact the owner:</p>
+          <p class="muted small">Reported item type: <span id="item-pill" class="pill"></span></p>
+
+          <div class="details-box" aria-label="Owner contact">
+            <p><strong>Name:</strong> <span id="owner-name"></span></p>
+            <p><strong>Phone:</strong> <a id="owner-phone"></a></p>
+          </div>
+
+          <p class="muted small" style="margin-top: 1rem">
+            Mention the ItemFocus code <strong id="shown-code"></strong> so the owner can confirm the tag.
+          </p>
+        </section>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+    <script>
+      (function () {
+        var missing = document.getElementById("state-missing");
+        var invalid = document.getElementById("state-invalid");
+        var found = document.getElementById("state-found");
+
+        function show(el) {
+          el.classList.remove("hidden");
+        }
+        function hide(el) {
+          el.classList.add("hidden");
+        }
+
+        var params = new URLSearchParams(window.location.search);
+        var raw = params.get("code") || "";
+        var code = raw.trim().toUpperCase();
+
+        if (!code) {
+          hide(invalid);
+          hide(found);
+          show(missing);
+          return;
+        }
+
+        hide(missing);
+
+        fetch("/api/tags/" + encodeURIComponent(code))
+          .then(function (res) {
+            if (res.status === 404) {
+              hide(found);
+              show(invalid);
+              return null;
+            }
+            if (!res.ok) throw new Error("bad status");
+            return res.json();
+          })
+          .then(function (data) {
+            if (!data) return;
+            hide(invalid);
+            show(found);
+            document.title = "ItemFocus | " + data.owner_name;
+            document.getElementById("item-pill").textContent = window.ItemFocusUi.categoryLabel(data.category);
+            document.getElementById("owner-name").textContent = data.owner_name;
+            var phone = data.owner_phone;
+            var link = document.getElementById("owner-phone");
+            var display = window.ItemFocusUi.formatPhoneDisplay(phone);
+            var tel = window.ItemFocusUi.telHrefFromPhone(phone);
+            link.textContent = display || phone;
+            link.href = tel || "#";
+            document.getElementById("shown-code").textContent = data.public_code;
+          })
+          .catch(function () {
+            hide(found);
+            show(invalid);
+          });
+      })();
+    </script>
+  </body>
+</html>
