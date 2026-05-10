@@ -11,11 +11,11 @@ The stack combines:
 
 1. Create a Supabase project.
 2. In the SQL editor, run [`sql/001_finder_tags.sql`](sql/001_finder_tags.sql).
-3. In **Project Settings → API**, note:
-   - `Project URL`
-   - `service_role` key (keep secret; **never expose it to the browser**)
+3. In **Settings → API Keys**, note:
+   - **Project URL** (same place as API keys)
+   - A **secret** key (`sb_secret_...`, recommended) or legacy **service_role** JWT — **never expose to the browser**; do **not** use the publishable key (`sb_publishable_...`) for this backend.
 
-The backend uses **only** the **service role** key server-side so the table can stay locked down behind Row Level Security with no anon policies.
+The server uses **only** that secret so the database can stay behind Row Level Security with no anon policies.
 
 ### API
 
@@ -61,6 +61,8 @@ The finder page expects a query string, for example:
 4. Deploy. Visiting `/` loads `index.html` via `StaticFiles(html=True)`; use `/found.html?code=…` from printed or generated QR codes.
 
 This repo includes [`render.yaml`](render.yaml) for a Blueprint (`sync: false` means set Supabase vars in the Render dashboard).
+
+If the stack shows `SupabaseException("Invalid API key")` at import/startup but you pasted a valid **`sb_secret_...`** secret, the cause is almost always an **old `supabase` Python package** (before 2.26) that only accepted JWT-shaped keys. This project pins **`supabase>=2.26`** in `requirements.txt` for that reason—redeploy after pulling so Render reinstalls dependencies.
 
 ### Security notes
 
